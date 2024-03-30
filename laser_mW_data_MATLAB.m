@@ -1,12 +1,15 @@
-% here I'm declaring a variable named 'intensityValues' which will define
-% my loop. As with every loop I'm indicating: what numeric value I'm
-% starting at, my step or the difference between each number, and lastly
-% what will my final numeric value is where the loop will terminate.
-intensityValues = 1:0.5:20;
+% Define the specific file numbers that correspond to the desired
+% intensities
+fileNumbers = [1, 9, 19, 29, 39];
+
+% Create a new figure window explicitly
+figure;
+hold on; % Hold on to add multiple plots to the same figure
 
 % starting my loop - we're going to loop over each file number from 1 to 39
 % each iteration represents one '.mat' file that will be processed.
-for fileNumber = 1:39
+for i = 1:length(fileNumbers)
+    fileNumber = fileNumbers(i);
     % we're creating a string and storing it in a variable named
     % 'fileName'. The 'sprintf' function creates a string from a format
     % specifier and a set of variables. The specifier here would be the
@@ -14,7 +17,6 @@ for fileNumber = 1:39
     % defined 'fileNum' to be. If < 10, file name will be prefixed with a 0
     % else, will generate integers of 10,11,12, etc.
     fileName = sprintf('%02d AP_hBN_File1.mat', fileNumber);
-
     % let's load all of the '.mat' files done by the iteration using the
     % load function and store it in a variable named 'loadedData'.
     loadedData = load(fileName);
@@ -24,66 +26,72 @@ for fileNumber = 1:39
 
     % listing of all variables stored within the loaded structure for
     % validation purposes
-    disp(whos('-file', fileName));
-    disp(fieldnames(loadedData));
-
-    % since we know that the intensity increases in steps of 0.5,
-    % we adjust the indexing to map file numbers to intensity values
-    % and then convert these to the structure names used in the files.
-    % we need to account for the fact that whole numbers are followed by a
-    % 0. For example, '10.0' becomes 100 and '10.5' becomes 105 etc.
-    intensityIndex = (fileNumber - 1) * 0.5 + 1;  
-
-    % beginning our logic, checking if the intensity index is a whole
-    % number and formatting the structure file name accordingly by
-    % appending a '0' for whole numbers (if applicable).
-    if mod(intensityIndex, 1) == 0  
-        % append '0' forwhole numbers
-        intensityStr = sprintf('%d0', intensityIndex);  
-    else
-        % multiply by 10 otherwise
-        intensityStr = sprintf('%d', intensityIndex * 10);  
-    end
-
-    % creating the structure name stored in a variable 'structName'.
+    disp(whos('-file', fileName)); % Display variables in the .mat file
+    disp(fieldnames(loadedData)); % Display field names of the loaded data
+    
+    % Determine the intensityValue based on fileNumber
+    intensityValue = switchIntensityValue(fileNumber);
+    
+    % Correctly format the intensityStr
+    intensityStr = formatIntensityStr(intensityValue);
+    
     structName = sprintf('Struct_%smW100X05s', intensityStr);
-
-    % access the structure and retrieve the y data
+    
     if isfield(loadedData, structName)
-        % we know that in a matrix it's 'row' x 'column' so we can denote 
-        % that notation using parenthesis. So here I'm telling it that I
-        % want the 1st column and the colon is denoting that I want all 
-        % the rows.
         yData = loadedData.(structName).data(1, :);
-
         % we're converting the second element of the 'axisscale' field 
         % w/in the structure from a "cell" to a "numeric". The fxn
         % 'axisscale' can store numeric data in a cell format so
         % we are making this conversion.
         x1 = cell2mat(loadedData.(structName).axisscale(2, 1));
-
         % we're doing calculations and storing it as a new variable named 
         % 'x2'using the values we know from 'x1'.
         x2 = ((1./(532*10^-7))-(1./(x1*10^-7)));
-
-        % defining our range of x-values we want our graph to display. 
-        % This will be the peak of hBN approximately.
-        xlim([1050 1500]);
-
-        % this fxn does what it sounds like, we're keeping the current plot
-        % and the subsequent iterations will be drawn over it. Good for 
-        % analyzing data and looking at trends as we're increasing the
-        % intensity/power of our laser which I have data for 1mW -> 20mW.
-        hold on;
-
-        % the actual plotting fxn. We are plotting a 2-D plot where we're 
-        % plotting 'y' against 'x2'.
-        plot(x2, yData);
+        
+        % Filter for x values between 1300 and 1500
+        validIndices = x2 >= 1300 & x2 <= 1500;
+        x2Filtered = x2(validIndices);
+        yDataFiltered = yData(validIndices);
+        
+        % Plot the filtered data
+        plot(x2Filtered, yDataFiltered);
+        
+        % Annotate each plot with its laser power
+        text(mean(x2Filtered), max(yDataFiltered), sprintf('%dmW', intensityValue), 'HorizontalAlignment', 'center');
     else
         warning('The structure %s does not exist in the file %s.', structName, fileName);
     end
 end
 
-% releasing the plot hold, no further data points to be made on current
-% plot.
-hold off;
+% Customize the plot
+xlabel('Raman shift (cm^-1)');
+ylabel('Intensity');
+xlim([1300 1500]); % Set the x-axis limits to focus on the 1300 - 1500 range
+hold off; % Release the hold on the figure
+
+% Helper functions to determine intensityValue and format intensityStr
+function iv = switchIntensityValue(fn)
+    switch fn
+        case 1
+            iv = 1;
+        case 9
+            iv = 5;
+        case 19
+            iv = 10;
+        case 29
+            iv = 15;
+        case 39
+            iv = 20;
+        otherwise
+            warning('Unexpected file number: %d', fn);
+            iv = -1; % Return a flag for an unexpected value
+    end
+end
+
+function is = formatIntensityStr(iv)
+    if iv == 1
+        is = sprintf('%d', iv); % For 1mW case
+    else
+        is = sprintf('%d0', iv); % For all other cases
+    end
+end
